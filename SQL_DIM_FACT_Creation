@@ -1,0 +1,60 @@
+--SQL SCRIPT 1.
+--creating empty tables( for the loading stage )
+
+use DataWarehouse;
+
+CREATE TABLE DimCustomer (
+    CustomerID VARCHAR(50) PRIMARY KEY,
+    CustomerName VARCHAR(100),
+    Gender VARCHAR(10),
+    Phone VARCHAR(20),
+    Email VARCHAR(100),
+    Gov VARCHAR(50),
+    City VARCHAR(100),
+    Address VARCHAR(255)
+);
+
+CREATE TABLE DimProduct (
+    ProductSKU VARCHAR(50) PRIMARY KEY,
+    ProductName VARCHAR(255),
+    Category VARCHAR(50)
+);
+
+CREATE TABLE DimGovernorate (
+    GovName VARCHAR(50) PRIMARY KEY,
+    AltName VARCHAR(50) NULL,
+    Latitude DECIMAL(9,6),
+    Longitude DECIMAL(9,6)
+);
+
+CREATE TABLE DimDate (
+    DateID INT PRIMARY KEY,
+    Year INT,
+    Month INT,
+    Quarter INT,
+    DayOfWeek INT
+);
+
+--we finished creating the empty Dim tables 
+
+-- Start creating the Sales_Fact Table
+CREATE TABLE Sales_Fact (
+    OrderID VARCHAR(50) PRIMARY KEY,
+    OrderDate INT,        -- Foreign Key to DimDate (DateID)
+    DeliveryDate INT,     -- Foreign Key to DimDate (DateID)
+    CustomerID VARCHAR(50),   -- Foreign Key to DimCustomer (CustomerID)
+    ProductSKU VARCHAR(50),   -- Foreign Key to DimProduct (ProductSKU)
+    SalesRep VARCHAR(100),
+    PaymentMethod VARCHAR(50),
+    TotalAmount DECIMAL(18, 2),
+    Quantity INT,
+    Discount DECIMAL(18, 2),
+    ShippingCost DECIMAL(18, 2),
+    ReturnFlag VARCHAR(10),
+    ReturnDate INT,       -- Foreign Key to DimDate (DateID) if applicable
+    FOREIGN KEY (OrderDate) REFERENCES DimDate(DateID),
+    FOREIGN KEY (DeliveryDate) REFERENCES DimDate(DateID),
+    FOREIGN KEY (CustomerID) REFERENCES DimCustomer(CustomerID),
+    FOREIGN KEY (ProductSKU) REFERENCES DimProduct(ProductSKU)
+);
+
