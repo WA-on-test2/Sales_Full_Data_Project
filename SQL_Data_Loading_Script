@@ -1,0 +1,146 @@
+--SQL SCRIPT 3.
+--Loading data into the model
+-- 
+
+--SQL for ETL Process
+--Load Dimension Tables
+INSERT INTO DimCustomer (CustomerID, CustomerName, Gender, Phone, Email, Gov, City, Address)
+SELECT DISTINCT CustomerID, CustomerName, Gender, Phone, Email, Gov, City, Address
+FROM stg_customers;
+
+--Data is successfully loaded into Dim customers
+TRUNCATE TABLE DimCustomer;
+
+
+INSERT INTO DimProduct (ProductSKU, ProductName, Category)
+SELECT DISTINCT SKU, ProductName, Category
+FROM Stg_Products;
+--Data is successfully loaded into Dim Products
+
+
+
+INSERT INTO DimGovernorate (GovName, AltName, Latitude, Longitude)
+SELECT DISTINCT GovName, AltName, Latitude, Longitude
+FROM stg_gov_lookup;
+
+--Data is successfully loaded into Dim GOV
+
+
+INSERT INTO DimDate (DateID, Year, Month, Quarter, DayOfWeek)
+SELECT DISTINCT 
+    CAST(Year(OrderDate) AS INT) * 10000 + CAST(Month(OrderDate) AS INT) * 100 + CAST(DAY(OrderDate) AS INT) AS DateID,
+    YEAR(OrderDate) AS Year,
+    MONTH(OrderDate) AS Month,
+    CASE 
+        WHEN MONTH(OrderDate) IN (1, 2, 3) THEN 1
+        WHEN MONTH(OrderDate) IN (4, 5, 6) THEN 2
+        WHEN MONTH(OrderDate) IN (7, 8, 9) THEN 3
+        ELSE 4
+    END AS Quarter,
+    DATEPART(WEEKDAY, OrderDate) AS DayOfWeek
+FROM Staging_Sales_Orders_Clean;
+select * from DimDate;
+--Add full date
+ALTER TABLE DimDate
+ADD FullDate DATE;
+UPDATE DimDate
+SET FullDate = CONVERT(DATE, 
+    STUFF(STUFF(CAST(DateID AS CHAR(8)), 5, 0, '-'), 8, 0, '-')
+);
+
+SELECT TOP 10 * FROM DimDate;
+
+
+
+
+---ALL Dim tables are created 
+
+
+   select * from Stg_Sales_Orders;
+   SELECT DISTINCT s.CustomerID
+FROM Stg_Sales_Orders AS s
+WHERE s.CustomerID IS NOT NULL
+AND s.CustomerID NOT IN (
+    SELECT CustomerID FROM DimCustomer
+);
+-- Insert into Sales_Fact from Staging_Sales_Orders
+
+
+
+
+
+
+
+   
+
+   -- Start creating the Sales_Fact Table
+CREATE TABLE Sales_Fact (
+    OrderID VARCHAR(50) PRIMARY KEY,
+    OrderDate INT,        -- Foreign Key to DimDate (DateID)
+    DeliveryDate INT,     -- Foreign Key to DimDate (DateID)
+    CustomerID VARCHAR(50),   -- Foreign Key to DimCustomer (CustomerID)
+    ProductSKU VARCHAR(50),   -- Foreign Key to DimProduct (ProductSKU)
+    SalesRep VARCHAR(100),
+    PaymentMethod VARCHAR(50),
+    TotalAmount DECIMAL(18, 2),
+    Quantity INT,
+    Discount DECIMAL(18, 2),
+    ShippingCost DECIMAL(18, 2),
+    ReturnFlag VARCHAR(10),
+    ReturnDate INT,       -- Foreign Key to DimDate (DateID) if applicable
+    FOREIGN KEY (OrderDate) REFERENCES DimDate(DateID),
+    FOREIGN KEY (DeliveryDate) REFERENCES DimDate(DateID),
+    FOREIGN KEY (CustomerID) REFERENCES DimCustomer(CustomerID),
+    FOREIGN KEY (ProductSKU) REFERENCES DimProduct(ProductSKU)
+);
+select * from Sales_Fact;
+
+
+-- Clean stg_customers (remove NULLs and duplicates)
+-- Find CustomerIDs in sales orders that don't exist in customers
+-- Add missing customers with placeholder data
+INSERT INTO DimCustomer (CustomerID, CustomerName, Gender, Phone, Email, Gov, City, Address)
+SELECT DISTINCT 
+    s.CustomerID,
+    'Unknown Customer' AS CustomerName,
+    NULL AS Gender,
+    NULL AS Phone,
+    NULL AS Email,
+    NULL AS Gov,
+    NULL AS City,
+    NULL AS Address
+FROM Stg_Sales_Orders s
+WHERE s.CustomerID NOT IN (SELECT CustomerID FROM DimCustomer)
+  AND s.CustomerID IS NOT NULL;
+
+  -- Insert into Sales_Fact with INNER JOINs to ensure data integrity
+INSERT INTO Sales_Fact (
+    OrderID, OrderDate, DeliveryDate, CustomerID, ProductSKU, 
+    SalesRep, PaymentMethod, TotalAmount, Quantity, Discount, 
+    ShippingCost, ReturnFlag, ReturnDate
+)
+SELECT 
+    s.OrderID,
+    d1.DateID AS OrderDate,
+    d2.DateID AS DeliveryDate,
+    s.CustomerID,
+    s.ProductSKU,
+    s.SalesRep,
+    s.PaymentMethod,
+    s.TotalAmount,
+    s.Quantity,
+    s.Discount,
+    s.ShippingCost,
+    s.ReturnFlag,
+    d3.DateID AS ReturnDate
+FROM Stg_Sales_Orders s
+INNER JOIN DimCustomer dc ON s.CustomerID = dc.CustomerID  -- Ensures CustomerID exists
+INNER JOIN DimProduct dp ON s.ProductSKU = dp.ProductSKU    -- Ensures ProductSKU exists
+LEFT JOIN DimDate d1 ON d1.FullDate = s.OrderDate
+LEFT JOIN DimDate d2 ON d2.FullDate = s.DeliveryDate
+LEFT JOIN DimDate d3 ON d3.FullDate = s.ReturnDate
+WHERE d1.DateID IS NOT NULL;  -- Ensures OrderDate is valid
+
+select * from Sales_Fact;
+
+--The Fact table is successfully created
