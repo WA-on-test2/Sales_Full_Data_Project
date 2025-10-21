@@ -1,0 +1,46 @@
+--SQL SCRIPT 2.
+--Some needed transformations
+-- Remove rows with NULL or empty CustomerID
+DELETE FROM stg_customers
+WHERE CustomerID IS NULL 
+   OR LTRIM(RTRIM(CustomerID)) = '';
+
+-- Remove duplicates
+;WITH CTE AS (
+    SELECT *,
+           ROW_NUMBER() OVER (PARTITION BY CustomerID ORDER BY (SELECT NULL)) AS rn
+    FROM stg_customers
+)
+DELETE FROM CTE
+WHERE rn > 1;
+
+-- Print result
+SELECT COUNT(*) AS TotalRows FROM stg_customers;
+SELECT COUNT(DISTINCT CustomerID) AS UniqueCustomers FROM stg_customers;
+
+-----------------------------------------------------------------------------------------------
+
+;WITH CTE AS (
+    SELECT *,
+           ROW_NUMBER() OVER (PARTITION BY GovName ORDER BY (SELECT NULL)) AS rn
+    FROM stg_gov_lookup
+)
+DELETE FROM CTE WHERE rn > 1;
+
+SELECT *
+INTO Staging_Sales_Orders_Clean
+FROM Stg_Sales_Orders;
+
+
+DELETE FROM Staging_Sales_Orders_Clean
+WHERE OrderDate IS NULL 
+   OR LTRIM(RTRIM(OrderDate)) = '';
+
+
+;WITH CTE AS (
+    SELECT *,
+           ROW_NUMBER() OVER (PARTITION BY CustomerID ORDER BY (SELECT NULL)) AS rn
+    FROM stg_sales_orders_clea
+)
+DELETE FROM CTE
+WHERE rn > 1;
